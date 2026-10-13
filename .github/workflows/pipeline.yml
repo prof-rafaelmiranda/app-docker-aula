@@ -1,9 +1,9 @@
-name: Build e Publicação Docker Hub
+
+name: Build e Deploy Docker
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -20,9 +20,25 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Construir e publicar imagem
+      - name: Build e Push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/app-docker-aula:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Implantar na VM via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/app-docker-aula:latest
+            docker rm -f app-docker-aula || true
+            docker run -d --name app-docker-aula -p 80:80 --restart unless-stopped ${{ secrets.DOCKERHUB_USERNAME }}/app-docker-aula:latest
